@@ -155,15 +155,24 @@ kernel void vector_times_vector(global float* a,
     const int i = get_global_id(0);
     result[i] = a[i] * b[i];
 }
-
+#define BUFFSIZE (1024 * 12)
 kernel void matrix_times_vector(global const float* a,
                                 global const float* b,
                                 global float* result) {
     const int i = get_global_id(0);
     const int n = get_global_size(0);
+    int t = get_local_id(0);
+    const int m = get_local_size(0);
+
+    __local float vec[BUFFSIZE];
+    
+    for (int j = t; j < n; j += m) {
+        vec[j] = b[j];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
     float sum = 0;
     for (int j=0; j<n; ++j) {
-        sum += a[i*n + j]*b[j];
+        sum += a[i*n + j]*vec[j];
     }
     result[i] = sum;
 }
