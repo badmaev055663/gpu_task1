@@ -127,7 +127,7 @@ void profile_matrix_times_matrix(int n, OpenCL& opencl) {
     auto b = random_matrix<float>(n,n);
     Matrix<float> result(n,n), expected_result(n,n);
     opencl.queue.flush();
-    cl::Kernel kernel(opencl.program, "matrix_times_matrix2");
+    cl::Kernel kernel(opencl.program, "matrix_times_matrix");
     auto t0 = clock_type::now();
     matrix_times_matrix(a, b, expected_result);
     auto t1 = clock_type::now();
@@ -139,7 +139,7 @@ void profile_matrix_times_matrix(int n, OpenCL& opencl) {
     kernel.setArg(2, d_result);
     opencl.queue.flush();
     auto t2 = clock_type::now();
-    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(n, n), cl::NullRange);
+    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(n, n), cl::NDRange(n / 4));
     opencl.queue.flush();
     auto t3 = clock_type::now();
     cl::copy(opencl.queue, d_result, begin(result), end(result));
@@ -190,31 +190,20 @@ kernel void matrix_times_vector(global const float* a,
 __kernel void matrix_times_matrix(global const float *a,
                                 global const float *b,
                                 global float *result) {
-    const int i = get_global_id(0);
-    const int n = get_global_size(0);
-    float row[1024];
-
-    // copy row of a to private
-    for (int j = 0; j < n; j++) {
-        row[j] = a[i * n + j];
-    }
-	for (int j = 0; j < n; j++) {
-		float sum = 0;
-		for (int k = 0; k < n; k++)
-			sum += row[k] * b[k * n + j];
-		result[i * n + j] = sum;
-	}
-}
-
-__kernel void matrix_times_matrix2(global const float *a,
-                                global const float *b,
-                                global float *result) {
     const int id_x = get_global_id(0);
     const int id_y = get_global_id(1);
+    int t = get_local_id(0);
+    const int m = get_local_size(0);
     const int n = get_global_size(0); // assume [n, n]
+
+    __local float row[1024];
+    for (int j = t; j < n; j += m) {
+        row[j] = a[id_y * n + j]; // assume all work items have the same id_y
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
     float sum = 0;
 	for (int j = 0; j < n; j++) {
-		sum += a[id_y * n + j] * b[j * n + id_x];
+		sum += row[j] * b[j * n + id_x];
     }
 	result[id_y * n + id_x] = sum;
 	
