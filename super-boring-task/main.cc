@@ -192,6 +192,18 @@ __kernel void matrix_times_matrix(global const float *a,
                                 global float *result) {
     const int i = get_global_id(0);
     const int n = get_global_size(0);
+    float row[1024];
+
+    // copy row of a to private
+    for (int j = 0; j < n; j++) {
+        row[j] = a[i * n + j];
+    }
+	for (int j = 0; j < n; j++) {
+		float sum = 0;
+		for (int k = 0; k < n; k++)
+			sum += row[k] * b[k * n + j];
+		result[i * n + j] = sum;
+	}
 }
 )";
 
