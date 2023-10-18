@@ -127,7 +127,7 @@ void profile_matrix_times_matrix(int n, OpenCL& opencl) {
     auto b = random_matrix<float>(n,n);
     Matrix<float> result(n,n), expected_result(n,n);
     opencl.queue.flush();
-    cl::Kernel kernel(opencl.program, "matrix_times_matrix");
+    cl::Kernel kernel(opencl.program, "matrix_times_matrix2");
     auto t0 = clock_type::now();
     matrix_times_matrix(a, b, expected_result);
     auto t1 = clock_type::now();
@@ -139,7 +139,7 @@ void profile_matrix_times_matrix(int n, OpenCL& opencl) {
     kernel.setArg(2, d_result);
     opencl.queue.flush();
     auto t2 = clock_type::now();
-    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(n), cl::NullRange);
+    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(n, n), cl::NullRange);
     opencl.queue.flush();
     auto t3 = clock_type::now();
     cl::copy(opencl.queue, d_result, begin(result), end(result));
@@ -204,6 +204,20 @@ __kernel void matrix_times_matrix(global const float *a,
 			sum += row[k] * b[k * n + j];
 		result[i * n + j] = sum;
 	}
+}
+
+__kernel void matrix_times_matrix2(global const float *a,
+                                global const float *b,
+                                global float *result) {
+    const int id_x = get_global_id(0);
+    const int id_y = get_global_id(1);
+    const int n = get_global_size(0); // assume [n, n]
+    float sum = 0;
+	for (int j = 0; j < n; j++) {
+		sum += a[id_y * n + j] * b[j * n + id_x];
+    }
+	result[id_y * n + id_x] = sum;
+	
 }
 )";
 
